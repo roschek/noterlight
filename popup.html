@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>Notes</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f9f9f9;
+      padding: 12px;
+      margin: 0;
+      width: 300px;
+      box-sizing: border-box;
+    }
+
+    h3 {
+      margin: 0 0 10px;
+      font-size: 16px;
+      color: #333;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 5px;
+    }
+
+   ul {
+  padding: 0;
+  margin: 0;
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+li {
+  background: white;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  font-size: 13px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  border-left: 3px solid #2196f3;
+  word-break: break-word; 
+  white-space: normal;
+}
+
+  li button {
+    font-size: 14px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: #888;
+    padding: 0;
+  }
+
+  li button:hover {
+    color: red;
+  }
+
+    li:last-child {
+      margin-bottom: 0;
+    }
+    .noterlight-highlight {
+  background: #ffff88;
+  padding: 1px 2px;
+  border-radius: 3px;
+  cursor: help;
+}
+  </style>
+</head>
+
+<body>
+  <h3>Notes for this page</h3>
+  <ul id="notes"></ul>
+  <script src="popup.js"></script>
+</body>
+
+</html>
