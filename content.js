@@ -255,3 +255,20 @@ chrome.storage.onChanged.addListener((changes, area) => {
     }
   }
 });
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === "scrollToNote") {
+    const text = message.payload;
+
+    const highlights = document.querySelectorAll(".noterlight-highlight");
+
+    for (const el of highlights) {
+      if (el.textContent.trim() === text.trim()) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.style.outline = "2px solid orange";
+        setTimeout(() => (el.style.outline = ""), 2000);
+        break;
+      }
+    }
+  }
+});

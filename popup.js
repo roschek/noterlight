@@ -21,6 +21,15 @@ document.addEventListener("DOMContentLoaded", () => {
         span.textContent = `"${entry.text}" → ${entry.note}`;
         li.appendChild(span);
 
+        span.addEventListener("click", () => {
+          chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            chrome.tabs.sendMessage(tabs[0].id, {
+              action: "scrollToNote",
+              payload: entry.text,
+            });
+          });
+        });
+
         const del = document.createElement("button");
         del.textContent = "🗑";
         del.style.float = "right";
