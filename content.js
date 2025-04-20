@@ -20,6 +20,18 @@ style.textContent = `
     border-radius: 3px;
     cursor: help;
   }
+  .noterlight-action {
+    position: absolute;
+    background: #2196f3;
+    color: white;
+    padding: 4px 6px;
+    border: none;
+    font-size: 12px;
+    border-radius: 4px;
+    z-index: 99999;
+    cursor: pointer;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+  }
 `;
 document.head.appendChild(style);
 
@@ -27,13 +39,9 @@ const globalTooltip = document.createElement("div");
 globalTooltip.className = "noter-tooltip";
 document.body.appendChild(globalTooltip);
 
-// Flag to prevent multiple simultaneous highlighting operations
-let isHighlightingInProgress = false;
-
 document.addEventListener("mouseup", () => {
   const selection = window.getSelection();
   const text = selection.toString().trim();
-
   if (
     text.length > 1 &&
     !selection.isCollapsed &&
@@ -41,17 +49,50 @@ document.addEventListener("mouseup", () => {
   ) {
     const range = selection.getRangeAt(0);
     const rect = range.getBoundingClientRect();
-    showNoteForm(rect.left + window.scrollX, rect.top + window.scrollY, text);
+    setTimeout(() => {
+      insertNoteButton(
+        rect.left + window.scrollX,
+        rect.top + window.scrollY,
+        text
+      );
+    }, 50);
+  } else {
+    removeNoteButton();
   }
 });
 
 document.addEventListener("mousedown", (e) => {
-  const ui = document.querySelector(".noterlight-ui");
-  if (ui && !ui.contains(e.target)) ui.remove();
+  if (
+    e.target.closest(".noterlight-ui") ||
+    e.target.closest(".noterlight-action")
+  )
+    return;
+  document.querySelectorAll(".noterlight-ui").forEach((el) => el.remove());
+  document.querySelectorAll(".noterlight-action").forEach((el) => el.remove());
 });
 
-function showNoteForm(x, y, selectedText) {
-  removeExistingForm();
+function insertNoteButton(x, y, selectedText) {
+  removeNoteButton();
+  const button = document.createElement("button");
+  button.className = "noterlight-action";
+  button.textContent = "📝";
+  button.style.top = `${y - 35}px`;
+  button.style.left = `${x}px`;
+  document.body.appendChild(button);
+  button.onclick = () => {
+    console.log("Button clicked", x, y, selectedText);
+    setTimeout(() => createNoteUI(x, y, selectedText), 50);
+    button.remove();
+  };
+}
+
+function removeNoteButton() {
+  const existing = document.querySelector(".noterlight-action");
+  if (existing) existing.remove();
+}
+
+function createNoteUI(x, y, selectedText) {
+  document.querySelectorAll(".noterlight-ui").forEach((el) => el.remove());
 
   const container = document.createElement("div");
   container.className = "noterlight-ui";
@@ -87,7 +128,7 @@ function showNoteForm(x, y, selectedText) {
     const note = textarea.value.trim();
     if (!note) return textarea.focus();
 
-    const key = window.location.href;
+    const key = window.location.origin + window.location.pathname;
     const shortText = selectedText.slice(0, 80);
 
     chrome.storage.local.get([key], (data) => {
@@ -110,165 +151,60 @@ function showNoteForm(x, y, selectedText) {
   document.body.appendChild(container);
 }
 
-function removeExistingForm() {
-  document.querySelectorAll(".noterlight-ui").forEach((el) => el.remove());
-}
-
-function highlightNotesOnPage() {
-  // Prevent multiple simultaneous operations
-  if (isHighlightingInProgress) return;
-
-  isHighlightingInProgress = true;
-
-  const key = window.location.href;
+function highlightSavedNotes() {
+  const key = window.location.origin + window.location.pathname;
   chrome.storage.local.get([key], (data) => {
     const notes = data[key] || [];
-
-    // Clear existing highlights first to prevent duplicates
-    clearExistingHighlights();
-
-    // Apply highlights for each note
     notes.forEach(({ text, note }) => highlightText(text, note));
-
-    isHighlightingInProgress = false;
-  });
-}
-
-function clearExistingHighlights() {
-  // Find all highlighted elements
-  const highlights = document.querySelectorAll(".noterlight-highlight");
-
-  // Replace each highlight with its text content
-  highlights.forEach((highlight) => {
-    const textNode = document.createTextNode(highlight.textContent);
-    highlight.parentNode.replaceChild(textNode, highlight);
   });
 }
 
 function highlightText(phrase, tooltip) {
-  if (!phrase || phrase.length < 2) return;
-
   const walker = document.createTreeWalker(
     document.body,
     NodeFilter.SHOW_TEXT,
-    {
-      acceptNode: function (node) {
-        // Skip nodes that are already in UI elements or highlights
-        if (
-          node.parentNode.closest(".noterlight-ui") ||
-          node.parentNode.classList.contains("noterlight-highlight") ||
-          node.parentNode.tagName === "SCRIPT" ||
-          node.parentNode.tagName === "STYLE"
-        ) {
-          return NodeFilter.FILTER_REJECT;
-        }
-
-        // Accept nodes that contain our phrase
-        if (node.nodeValue.includes(phrase)) {
-          return NodeFilter.FILTER_ACCEPT;
-        }
-
-        return NodeFilter.FILTER_SKIP;
-      },
-    },
+    null,
     false
   );
-
   while (walker.nextNode()) {
     const node = walker.currentNode;
-    const text = node.nodeValue;
-    const index = text.indexOf(phrase);
+    if (
+      node.nodeType === Node.TEXT_NODE &&
+      node.nodeValue.includes(phrase) &&
+      !node.parentNode.closest(".noterlight-ui")
+    ) {
+      const text = node.nodeValue;
+      const parent = node.parentNode;
+      const index = text.indexOf(phrase);
+      if (index === -1) continue;
 
-    if (index === -1) continue;
+      const before = document.createTextNode(text.slice(0, index));
+      const match = document.createElement("span");
+      match.className = "noterlight-highlight";
+      match.textContent = phrase;
 
-    const parent = node.parentNode;
-    const before = document.createTextNode(text.slice(0, index));
-    const match = document.createElement("span");
-    match.className = "noterlight-highlight";
-    match.textContent = phrase;
-    match.dataset.note = tooltip; // Store note data in the element
+      match.addEventListener("mouseenter", () => {
+        globalTooltip.textContent = tooltip;
+        const rect = match.getBoundingClientRect();
+        globalTooltip.style.top = `${rect.top + window.scrollY - 30}px`;
+        globalTooltip.style.left = `${rect.left + window.scrollX}px`;
+        globalTooltip.style.opacity = "1";
+      });
 
-    match.addEventListener("mouseenter", () => {
-      globalTooltip.textContent = tooltip;
-      const rect = match.getBoundingClientRect();
-      globalTooltip.style.top = `${rect.top + window.scrollY - 30}px`;
-      globalTooltip.style.left = `${rect.left + window.scrollX}px`;
-      globalTooltip.style.opacity = "1";
-    });
+      match.addEventListener("mouseleave", () => {
+        globalTooltip.style.opacity = "0";
+      });
 
-    match.addEventListener("mouseleave", () => {
-      globalTooltip.style.opacity = "0";
-    });
+      const after = document.createTextNode(text.slice(index + phrase.length));
+      const frag = document.createDocumentFragment();
+      frag.appendChild(before);
+      frag.appendChild(match);
+      frag.appendChild(after);
 
-    const after = document.createTextNode(text.slice(index + phrase.length));
-    const fragment = document.createDocumentFragment();
-    fragment.appendChild(before);
-    fragment.appendChild(match);
-    fragment.appendChild(after);
-
-    parent.replaceChild(fragment, node);
-    walker.currentNode = after;
+      parent.replaceChild(frag, node);
+      break;
+    }
   }
 }
 
-// Initialize highlighting when the page is fully loaded
-window.addEventListener("load", () => {
-  setTimeout(highlightNotesOnPage, 500); // Small delay to ensure DOM is fully ready
-});
-
-// Re-apply highlights when the DOM changes (for dynamic websites)
-const observer = new MutationObserver((mutations) => {
-  // Don't trigger while another highlighting operation is in progress
-  if (isHighlightingInProgress) return;
-
-  // Wait a bit to batch multiple DOM changes
-  clearTimeout(window.highlightDebounce);
-  window.highlightDebounce = setTimeout(highlightNotesOnPage, 500);
-});
-
-// Configure the observer to watch for changes to the DOM structure
-observer.observe(document.body, {
-  childList: true, // watch for changes to the direct children
-  subtree: true, // watch for changes to the entire subtree
-  characterData: true, // watch for changes to text content
-});
-
-// Also refresh highlights when the page visibility changes
-// (handles cases when user returns to a tab)
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") {
-    setTimeout(highlightNotesOnPage, 500);
-  }
-});
-
-// Run initial highlighting
-highlightNotesOnPage();
-
-// Listen for storage changes to apply new highlights from other tabs
-chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "local") {
-    const currentUrl = window.location.href;
-
-    // Check if the change is for our current URL
-    if (changes[currentUrl]) {
-      setTimeout(highlightNotesOnPage, 100);
-    }
-  }
-});
-
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === "scrollToNote") {
-    const text = message.payload;
-
-    const highlights = document.querySelectorAll(".noterlight-highlight");
-
-    for (const el of highlights) {
-      if (el.textContent.trim() === text.trim()) {
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
-        el.style.outline = "2px solid orange";
-        setTimeout(() => (el.style.outline = ""), 2000);
-        break;
-      }
-    }
-  }
-});
+highlightSavedNotes();
